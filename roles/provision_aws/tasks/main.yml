@@ -1,0 +1,145 @@
+---
+- name: Create EC2 SSH Key Pair
+  include: tasks/create-ec2-ssh-key.yml
+
+- name: Create VPC and Subnets
+  include: tasks/create-vpc.yml
+
+- name: Provision EC2 Instances
+  ec2:
+    key_name : ansible_keypair
+    instance_type: "{{ item.instance_type }}"
+    image: "{{ item.ami }}"
+    region: "{{ region }}"
+    zone: "{{ item.zone }}"
+    group: "vpc_sg_{{ stack }}_{{ item.tier }}_{{ env }}"
+    vpc_subnet_id: "{{ vars[item.subnet_fact] }}"
+    assign_public_ip: yes
+    user_data: |
+      #!/bin/sh
+      sudo yum install python3 -y
+    instance_tags:
+      Name: "{{ stack }}_{{ item.tier }}_{{ env }}"
+      env: "{{ env }}"
+      stack: "{{ stack }}"
+      owner: "{{ owner }}"
+    exact_count: "{{ item.instance_count }}"
+    count_tag:
+      Name: "{{ stack }}_{{ item.tier }}_{{ env }}"
+    wait: yes
+  with_items:
+    - "{{ machine }}"
+  register: ec2
+
+- name: Add Hosts to Inventory
+  add_host:
+    host: "{{ item.1.public_ip }}"
+    groupname: "{{ item.0.item.tier }}"
+  with_subelements:
+    - "{{ ec2.results }}"
+    - tagged_instances
+
+- name: Wait for SSH to come up
+  wait_for:
+    host: "{{ item.1.public_ip }}"
+    port: 22
+    state: started
+  with_subelements:
+    - "{{ ec2.results }}"
+    - tagged_instances
+
+- name: Wait for DNS Connection to come up
+  delegate_to: "{{ item.1.public_dns_name }}"
+  wait_for_connection:
+  with_subelements:
+    - "{{ ec2.results }}"
+    - tagged_instances
+
+- name: Build a list of hosts to attach to Vote App Target Group
+  set_fact:
+    vote_host_group_list: "{{ vote_host_group_list|default([]) + [ {'Id': item.1.private_ip, 'Port': 5000} ] }}"
+  with_subelements:
+    - "{{ ec2.results }}"
+    - tagged_instances
+  when: item.0.item.tier == "app_tier"
+
+# Create a target group with IP address targets
+- name: Create Vote App Target Group for ALB
+  elb_target_group:
+    name: "elb-tg-{{ stack | replace('_', '-') }}-vote"
+    region: "{{ region }}"
+    vpc_id: "{{ vpc_id }}"
+    state: present
+    protocol: http
+    port: 5000
+    health_check_path: /
+    health_check_protocol: http
+    health_check_port: "5000"
+    successful_response_codes: "200"
+    target_type: ip
+    targets: "{{ vote_host_group_list }}"
+    tags:
+      Name: "elb-tg-{{ stack | replace('_', '-') }}"
+      env: "{{ env }}"
+      owner: "{{ owner }}"
+      stack: "{{ stack }}"
+
+- name: Build a list of hosts to attach to Result App Target Group
+  set_fact:
+    result_host_group_list: "{{ result_host_group_list|default([]) + [ {'Id': item.1.private_ip, 'Port': 5001} ] }}"
+  with_subelements:
+    - "{{ ec2.results }}"
+    - tagged_instances
+  when: item.0.item.tier == "app_tier"
+
+# Create a target group with IP address targets
+- name: Create Result App Target Group for ALB
+  elb_target_group:
+    name: "elb-tg-{{ stack | replace('_', '-') }}-result"
+    region: "{{ region }}"
+    vpc_id: "{{ vpc_id }}"
+    state: present
+    protocol: http
+    port: 5001
+    health_check_path: /
+    health_check_protocol: http
+    health_check_port: "5001"
+    successful_response_codes: "200"
+    target_type: ip
+    targets: "{{ result_host_group_list }}"
+    tags:
+      Name: "elb-tg-{{ stack | replace('_', '-') }}"
+      env: "{{ env }}"
+      owner: "{{ owner }}"
+      stack: "{{ stack }}"
+
+# Create an ALB with listeners and rules
+- name: Create Application Load Balancer
+  elb_application_lb:
+    name: "elb-{{ stack | replace('_', '-') }}"
+    region: "{{ region }}"
+    subnets:
+      - "{{ app_tier_subnet1 }}"
+      - "{{ app_tier_subnet2 }}"
+    security_groups:
+      - "vpc_sg_{{ stack }}_app_tier_{{ env }}"
+    scheme: internet-facing
+    listeners:
+      - Protocol: HTTP
+        Port: 5000
+        DefaultActions:
+          - Type: forward
+            TargetGroupName: "elb-tg-{{ stack | replace('_', '-') }}-vote"
+      - Protocol: HTTP
+        Port: 5001
+        DefaultActions:
+          - Type: forward
+            TargetGroupName: "elb-tg-{{ stack | replace('_', '-') }}-result"
+    state: present
+    wait: yes
+    wait_timeout: 200
+    tags:
+      Name: "elb-{{ stack | replace('_', '-') }}"
+      env: "{{ env }}"
+      owner: "{{ owner }}"
+      stack: "{{ stack }}"

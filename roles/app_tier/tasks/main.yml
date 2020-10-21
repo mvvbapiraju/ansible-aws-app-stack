@@ -1,0 +1,40 @@
+---
+# tasks file for app_tier
+- name: Copy source code
+  copy:
+    src: ../../../src/
+    dest: /home/ec2-user/src/
+    owner: ec2-user
+    group: ec2-user
+    mode: 0755
+    directory_mode: yes
+
+- name: Update user home permissions
+  file:
+    path: /home/ec2-user
+    owner: ec2-user
+    group: ec2-user
+    mode: 0755
+    state: directory
+    recurse: yes
+
+- name: Deploy services using docker-compose
+  shell:
+    cmd: sh build.sh
+    chdir: /home/ec2-user/src/
+  async: 1000
+  poll: 0
+
+- name: Wait until service is up
+  command: /bin/sleep 120
+  async: 200
+  poll: 1
+  register: compose_poll
+
+- name: Service deployment status check
+  async_status:
+    jid: "{{ compose_poll.ansible_job_id }}"
+  register: job_result
+  until: job_result.finished
+  retries: 10
+  delay: 20

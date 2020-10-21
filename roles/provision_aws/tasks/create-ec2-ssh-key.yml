@@ -1,0 +1,22 @@
+---
+###########################
+### Create EC2 SSH Key Pair
+###########################
+- name: Check if SSH key already exists
+  stat:
+    path: ~/.ssh/id_rsa.pub
+  register: sshkey
+
+- name: Create SSH key pair, if not exist
+  user:
+    name: "{{ owner }}"
+    generate_ssh_key: yes
+    ssh_key_bits: 2048
+  when: sshkey.stat.exists == False
+
+- name: Create AWS key pair using Ansible's key
+  local_action: ec2_key
+  args:
+    name: ansible_keypair
+    region: "{{ region }}"
+    key_material: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"

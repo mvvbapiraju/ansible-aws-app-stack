@@ -1,0 +1,4 @@
+.idea/
+
+./launch_aws.sh
+./destroy_aws.sh

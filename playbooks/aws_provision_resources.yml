@@ -1,0 +1,6 @@
+---
+- name: Provision AWS infrastructure
+  hosts: localhost
+  roles:
+    - {name: provision_aws, tags: aws-resources}
+...

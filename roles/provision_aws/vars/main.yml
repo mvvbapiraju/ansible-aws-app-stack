@@ -1,0 +1,61 @@
+---
+#######################
+## Set play DEFAULTS ##
+#######################
+
+# Set the name of your stack
+stack: veera_ps_demo
+
+# Set what environment you want this tagged with: dev/stage/production
+env: dev
+
+# Set who owns it (your name)
+owner: veera_mallipudi
+
+## Set base AMI to use
+base_ami: ami-0947d2ba12ee1ff75 # Amazon Linux 2 AMI (HVM), SSD
+instance_type: t2.micro
+
+############################
+## Set AWS Region and AZs ##
+############################
+region: us-east-1
+zone1: us-east-1a
+zone2: us-east-1b
+
+#####################
+## Set CIDR Blocks ##
+#####################
+vpc_cidr_block: 10.1.0.0/16
+app_tier_subnet_cidr1: 10.1.1.0/24
+app_tier_subnet_cidr2: 10.1.2.0/24
+
+machine:
+  - tier: app_tier
+    ami: "{{ base_ami }}"
+    instance_type: "{{ instance_type }}"
+    instance_count: 1
+    subnet_id: "{{ app_tier_subnet_cidr1 }}"
+    subnet_fact: "app_tier_subnet1"
+    zone: "{{ zone1 }}"
+  - tier: app_tier
+    ami: "{{ base_ami }}"
+    instance_type: "{{ instance_type }}"
+    instance_count: 1
+    subnet_id: "{{ app_tier_subnet_cidr2 }}"
+    subnet_fact: "app_tier_subnet2"
+    zone: "{{ zone2 }}"
+
+tier:
+  ####################################
+  ##### Define Variables for App Tier
+  ####################################
+  - name: app_tier
+    ### Firewall rules - INBOUND
+    rules:
+      - proto: tcp
+        ports:
+          - 22
+          - 5000
+          - 5001
+        cidr_ip: 0.0.0.0/0

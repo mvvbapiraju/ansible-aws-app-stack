@@ -1,0 +1,85 @@
+---
+########################
+### Create VPC & Subnets
+########################
+- name: Create EC2 VPC
+  ec2_vpc_net:
+    name: "vpc_{{ stack }}_{{ env }}"
+    cidr_block: "{{ vpc_cidr_block }}"
+    region: "{{ region }}"
+    state: present
+    tags:
+      Name: "vpc_{{ stack }}_{{ env }}"
+      env: "{{ env }}"
+      owner: "{{ owner }}"
+      stack: "{{ stack }}"
+  register: vpc
+
+- name: Set VPC Id variable
+  set_fact: vpc_id="{{ vpc.vpc.id  }}"
+
+- name: Create Subnets for VPC
+  ec2_vpc_subnet:
+    state: present
+    vpc_id: "{{ vpc_id }}"
+    region: "{{ region }}"
+    az: "{{ item.zone }}"
+    cidr: "{{ item.subnet_id }}"
+    tags:
+      Name: "vpc_subnet_{{ item.zone }}_{{ stack }}_{{ item.tier }}_{{ env }}"
+      env: "{{ env }}"
+      owner: "{{ owner }}"
+      stack: "{{ stack }}"
+      subnet_fact: "{{ item.subnet_fact }}"
+  with_items:
+    - "{{ machine }}"
+  register: subnet
+
+- name: Set Subnet variables
+  set_fact:
+    "{{ item.subnet.tags.subnet_fact }}={{ item.subnet.id }}"
+  with_items: "{{ subnet.results }}"
+
+- name: Create Internet Gateway
+  ec2_vpc_igw:
+    vpc_id: "{{ vpc_id }}"
+    region: "{{ region }}"
+    state: present
+    tags:
+      Name: "vpc_igw_{{ stack }}_{{ env }}"
+      env: "{{ env }}"
+      owner: "{{ owner }}"
+      stack: "{{ stack }}"
+  register: igw
+
+- name: Create Route Table for IGW
+  ec2_vpc_route_table:
+    vpc_id: "{{ vpc_id }}"
+    region: "{{ region }}"
+    subnets:
+      - "{{ app_tier_subnet1 }}"
+      - "{{ app_tier_subnet2 }}"
+    routes:
+      - dest: 0.0.0.0/0
+        gateway_id: "{{ igw.gateway_id  }}"
+    tags:
+      Name: "vpc_igw_route_{{ stack }}_{{ env }}"
+      env: "{{ env }}"
+      owner: "{{ owner }}"
+      stack: "{{ stack }}"
+
+- name: Create Security Groups
+  ec2_group:
+    name: "vpc_sg_{{ stack }}_{{ item.name }}_{{ env }}"
+    description: Security group for EC2 instances
+    region: "{{ region }}"
+    vpc_id: "{{ vpc_id }}"
+    rules: "{{ item.rules }}"
+    state: present
+    tags:
+      Name: "vpc_sg_{{ stack }}_{{ item.name }}_{{ env }}"
+      env: "{{ env }}"
+      owner: "{{ owner }}"
+      stack: "{{ stack }}"
+  with_items: "{{ tier }}"
+  register: sg_id

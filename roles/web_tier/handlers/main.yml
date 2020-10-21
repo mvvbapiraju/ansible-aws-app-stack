@@ -1,0 +1,6 @@
+---
+# handlers file for lb-tier-httpd
+- name: restart_httpd
+  service:
+    name: httpd.service
+    state: restarted

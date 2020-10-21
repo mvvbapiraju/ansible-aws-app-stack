@@ -1,0 +1,65 @@
+---
+- hosts: "localhost"
+  connection: "local"
+  gather_facts: false
+  vars:
+    region: "us-east-1"
+    stack: veera_3_tier_stack
+    env: "dev"
+    sg_tier:
+      - app_tier
+    sg_description: "Security group for EC2 instances"
+
+  tasks:
+    - name: Gather EC2 Info
+      ec2_instance_info:
+        region: "{{ region }}"
+        filters:
+          "tag:stack": "{{ stack }}"
+      register: ec2
+    - debug: var=ec2
+
+    - name: Terminate EC2 Instances
+      ec2:
+        region: "{{ region }}"
+        instance_ids: '{{ item.instance_id }}'
+        state: absent
+      with_items: "{{ ec2.instances }}"
+
+    - name: Get EC2 VPC Info
+      ec2_vpc_net_info:
+        region: "{{ region }}"
+        filters:
+          "tag:stack": "{{ stack }}"
+      register: vpc_info
+    - debug: var=vpc_info
+
+    - name: Set VPC Id Variable
+      set_fact: vpc_id="{{ vpc_info.vpcs[0].vpc_id }}"
+    - debug: var=vpc_id
+
+    - name: Delete EC2 VPC
+      ec2_vpc_net:
+        name: "{{ item.tags.Name }}"
+        cidr_block: "{{ item.cidr_block }}"
+        region: "{{ region }}"
+        state: absent
+      register: vpc
+      with_items:
+        - "{{ vpc_info.vpcs }}"
+    - debug: var=vpc
+
+    - name: Delete Target Group
+      elb_target_group:
+        name: "elb-tg-{{ stack | replace('_', '-') }}"
+        region: "{{ region }}"
+        vpc_id: "{{ vpc_id }}"
+        protocol: http
+        port: 8080
+        state: absent
+
+    - name: Delete ALB
+      elb_application_lb:
+        name: "elb-{{ stack | replace('_', '-') }}"
+        region: "{{ region }}"
+        state: absent

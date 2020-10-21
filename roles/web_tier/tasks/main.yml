@@ -1,0 +1,31 @@
+---
+- hosts: webservers
+  gather_facts: false
+  remote_user: ec2-user
+  tasks:
+    - name: "Wait for SSH to come up"
+      wait_for_connection:
+        delay: 5
+        timeout: 90
+
+    - name: "Collect instance facts"
+      ec2_metadata_facts: ~
+
+    - name: "Install HTTPD"
+      become: true
+      yum:
+        name: httpd
+        state: present
+
+    - name: "Start HTTPD"
+      become: true
+      service:
+        enabled: true
+        name: httpd
+        state: started
+
+    - name: "Deploy content"
+      become: true
+      template:
+        dest: /var/www/html/index.html
+        src: index.html.j2

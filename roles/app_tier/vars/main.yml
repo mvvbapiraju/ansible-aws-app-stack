@@ -1,0 +1,3 @@
+---
+# vars file for app_tier
+webapps: /usr/share/tomcat/webapps

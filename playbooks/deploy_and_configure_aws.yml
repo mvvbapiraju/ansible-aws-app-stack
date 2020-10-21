@@ -1,0 +1,7 @@
+---
+- name: Launch AWS Resources
+  import_playbook: aws_provision_resources.yml
+
+- name: Configure App Tiers
+  import_playbook: aws_configure_tiers.yml
+...

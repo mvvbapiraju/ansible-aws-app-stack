@@ -1,0 +1,9 @@
+---
+- name: Deploy application servers
+  become: true
+  hosts: app_tier
+  gather_facts: false
+  roles:
+    - {name: base_config, tags: base-config}
+    - {name: app_tier, tags: [app-tier, apps, Tomcat]}
+...
