@@ -116,11 +116,10 @@ ssh-keygen -f id_rsa.pub -m 'PEM' -e > id_rsa.pem
 * This playbook executes provision_aws role by taking all its variables from provision_aws/vars/main.yml file.
 
 #### aws_configure_tiers.yml
-Deploys and configures the 3 Tier Application.
-* This playbook uses Ansible AWS EC2 dynamic inventory feature to configure 3 Tier Application Servers:
-  * HAProxy as the frontend server to load balance between application servers.
-  * Tomcat as the application servers.
-  * PostgreSQL as the database server.
+Deploys and configures the required applications.
+* This playbook uses Ansible AWS EC2 dynamic inventory feature to configure Application Servers:
+  * AWS EC2 Instances to host applications.
+  * AWS ALB and Target Groups to load balance between application servers.
 
 ### aws_delete_resources.yml
   * Playbook to cleanup all the AWS resources previously created by aws_provision_resources.yml playbook.
@@ -134,8 +133,6 @@ Deploys and configures the 3 Tier Application.
    * IGW (Internet Gateway) - 1
    * Security Groups - 1 (for app-tier)
    * EC2 Instances - 2 (2 for App Tier)
-
-* Below load balancing resources are now added to replace HAProxy Load Balancer
    * Application Load Balancer - 1
    * Target Group for ALB - 1
 
